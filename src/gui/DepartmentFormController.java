@@ -1,10 +1,14 @@
 package gui;
 
 import java.net.URL;
-import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.Set;
 
 import db.DbException;
+import gui.listeners.DataChangeListener;
 import gui.util.Alerts;
 import gui.util.Constraints;
 import gui.util.Utils;
@@ -16,13 +20,15 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import model.entities.Department;
+import model.exceptions.ValidationException;
 import model.services.DepartmentService;
 
 public class DepartmentFormController implements Initializable {
 
 	private DepartmentService departmentService;
 	private Department departmentEntity;
-	
+	private List<DataChangeListener> dataChangeListeners = new ArrayList<>();
+
 	@FXML
 	private TextField txtId;
 
@@ -38,6 +44,12 @@ public class DepartmentFormController implements Initializable {
 	@FXML
 	private Button btCancel;
 
+	// Objects that implements DataChangeListener can subscribe to receive the event
+	// from this class
+	public void subscribeDataChangeListener(DataChangeListener listener) {
+		dataChangeListeners.add(listener);
+	}
+
 	@FXML
 	public void onBtSaveAction(ActionEvent actionEvent) {
 		if (departmentEntity == null) {
@@ -46,23 +58,47 @@ public class DepartmentFormController implements Initializable {
 		if (departmentService == null) {
 			throw new IllegalStateException("Department Service is null");
 		}
-		
+
 		try {
 			departmentEntity = getFormData();
 			departmentService.saveOrUpdate(departmentEntity);
+			// when we have the action of save or update
+			// we need to notify the listeners from the list
+			// about the change
+			notifyDataChangeListeners();
 			// to close the window after the action
 			Utils.currentStage(actionEvent).close();
-		} catch (DbException e) {
+		}
+		catch (ValidationException e) {
+			setErrorMessages(e.getErros());
+		}
+		catch (DbException e) {
 			Alerts.showAlert("Error saving objetc", null, e.getMessage(), AlertType.ERROR);
+		}
+	}
+
+	private void notifyDataChangeListeners() {
+		for (DataChangeListener listener : dataChangeListeners) {
+			listener.onDataChanged();
 		}
 	}
 
 	private Department getFormData() {
 		Department department = new Department();
-		
+
+		ValidationException exceptionError = new ValidationException("Validation Error");
+
 		department.setId(Utils.tryParseToInt(txtId.getText()));
+
+		if (txtName.getText() == null || txtName.getText().trim().equals("")) {
+			exceptionError.addErrors("name", "Field can not be empty");
+		}
 		department.setName(txtName.getText());
 		
+		if (exceptionError.getErros().size() > 0) {
+			throw exceptionError;
+		}
+
 		return department;
 	}
 
@@ -81,19 +117,27 @@ public class DepartmentFormController implements Initializable {
 		Constraints.setTextFieldMaxLength(txtName, 30);
 	}
 
-	public void setDepartment (Department departmentEntity) {
+	public void setDepartment(Department departmentEntity) {
 		this.departmentEntity = departmentEntity;
 	}
-	
-	public void setDepartmentService (DepartmentService departmentService) {
+
+	public void setDepartmentService(DepartmentService departmentService) {
 		this.departmentService = departmentService;
 	}
-	
+
 	public void updateFormData() {
-		if(departmentEntity == null) {
+		if (departmentEntity == null) {
 			throw new IllegalStateException("Department entity is null");
 		}
 		txtId.setText(String.valueOf(departmentEntity.getId()));
 		txtName.setText(departmentEntity.getName());
+	}
+	
+	private void setErrorMessages(Map<String, String> errors) {
+		Set<String> fields = errors.keySet();
+		
+		if (fields.contains("name")) {
+			lbError.setText(errors.get("name"));
+		}
 	}
 }
