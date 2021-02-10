@@ -64,9 +64,9 @@ public class DepartmentDaoJDBC implements DepartmentDao {
 			
 			int result = ps.executeUpdate();
 			
-			if (result > 0) {
-				System.out.println("Department updated! ");
-			} else {
+			if (result <= 0) {
+			//	System.out.println("Department updated! ");
+			//} else {
 				throw new DbException("Error during the inserted.");
 			}
 		} catch (SQLException e) {
